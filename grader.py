@@ -9,7 +9,8 @@ from openai import OpenAI
 openai_api_key = os.environ.get('OPENAI_KEY')
 
 root_dir = "C:/Grading/ass1"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/ass1/ProcessedQ1"  # Replace with the path to your Processed directory
+processed_dir = "C:/Grading/ass1/Q2/ProcessedQ2"  # Replace with the path to your Processed directory
+output_dir = "C:/Grading/ass1/Q2/OutputQ2"  # Replace with the path to your Processed directory
 c_files = [os.path.join(processed_dir, file) for file in os.listdir(processed_dir) if file.endswith('.c')]
 
 
@@ -23,7 +24,7 @@ def grade_c_program(c_file, input_file, correct_file):
     # Check for compilation errors
     if result.returncode != 0:
         tests_failed.add(f"Compilation Error. Grade: 0")
-        return 0, tests_failed
+        return 0, tests_failed, "Compilation Error"
 
     # Read input lines from the file
     try:
@@ -31,7 +32,7 @@ def grade_c_program(c_file, input_file, correct_file):
             input_lines = file.readlines()
     except IOError:
         tests_failed.add("Error reading input file")
-        return 0, tests_failed
+        return 0, tests_failed, "Error reading input file"
 
     # Read correct lines from the file
     try:
@@ -40,7 +41,7 @@ def grade_c_program(c_file, input_file, correct_file):
         correct_lines = ''.join(correct_lines)
     except IOError:
         tests_failed.add("Error reading input file")
-        return 0, tests_failed
+        return 0, tests_failed, "Error reading input file"
 
     # Initialize variables for output aggregation and grading
     aggregated_output = []
@@ -63,22 +64,59 @@ def grade_c_program(c_file, input_file, correct_file):
         tests_failed.add(f"Runtime Error. Grade: 0")
         return 0, tests_failed
 
-    correct_lines = correct_lines.strip().split('___')
+    segmented_output = aggregated_output.copy()
+    aggregated_output = ''.join(aggregated_output)
+    aggregated_output = aggregated_output.lower()
+    output_copy = aggregated_output
+
+
+
+    aggregated_output = aggregated_output.split('\n')
+    aggregated_output = [agr.strip() for agr in aggregated_output]
+    correct_lines = correct_lines.strip().split('\n')
+    correct_lines = [correct_lines[i].split(';') for i in range(len(correct_lines))]
+    total_tests = sum(len(sub_elements) for sub_elements in correct_lines)
 
     def extract_numbers(text):
+        if isinstance(text, list):
+            text = ''.join(text)
         # Use regular expression to find all numbers
         return re.findall(r'-?\d+\.?\d*', text)
 
+    errors1 = 0
+    errors2 = 0
+    tests_failed1 = tests_failed.copy()
+    tests_failed2 = tests_failed.copy()
     for i in range(len(correct_lines)):
         desired_numbers = extract_numbers(correct_lines[i])
-        student_numbers = extract_numbers(aggregated_output[i])
-        if desired_numbers != student_numbers:
-            tests_failed.add(f"Test {input_lines[i].strip()} failed. expected: {desired_numbers}, actual: {student_numbers} \n")
+        student_numbers = extract_numbers(segmented_output[i])
+        # if desired_numbers != student_numbers:
+        #    tests_failed.add(f"Test {input_lines[i].strip()} failed. expected: {desired_numbers}, actual: {student_numbers} \n")
+        for num in desired_numbers:
+            if num not in student_numbers:
+                errors2 += 1
+                tests_failed1.add(f"Test {input_lines[i].strip()} failed.\n")
+        for j in range(len(correct_lines[i])):
+            if correct_lines[i][j] in aggregated_output:
+                aggregated_output.remove(correct_lines[i][j])
+            else:
+                errors1 += 1
+                tests_failed2.add(f"Test {input_lines[i].strip()} failed. expected: {correct_lines[i][j]}\n")
 
-    correct_count = len(input_lines) - len(tests_failed)
+    if errors1 > errors2:
+        errors = errors2
+        tests_failed = tests_failed1
+    else:
+        errors = errors1
+        tests_failed = tests_failed2
+    correct_count = total_tests - errors
     # Calculate the grade
-    grade = (correct_count / len(input_lines)) * 100
-    return grade, tests_failed
+    grade = (correct_count / total_tests) * 100
+    if grade < 100:
+        with open(os.path.join(output_dir, Path(f'{c_file}{grade}.txt').name), 'w') as file:
+            file.write(output_copy)
+
+    return grade, tests_failed, output_copy
 
 
 def grade_c_code(c_file_path, openai_api_key):
@@ -152,6 +190,8 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
     sheet['C1'] = 'Style Grade'
     sheet['D1'] = 'Report'
     sheet['E1'] = 'Total Grade'
+    #sheet['F1'] = 'Output'
+    sheet['F1'] = 'code'
 
     # Directory where the reports and code files are located
     reports_directory = "reports"
@@ -160,30 +200,36 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
     for index, c_file in enumerate(c_files, start=2):  # Start from row 2 for data
         print("report for", c_file, ":")
         # Grade the code
-        code_grade, tests_failed = grade_c_program(c_file, input_text, correct_output)
+        code_grade, tests_failed, output = grade_c_program(c_file, input_text, correct_output)
         print("code grade =", code_grade)
 
-        # # OpenAI API call and write to a file
-        with open(os.path.join(reports_directory, Path(f'{c_file}.txt').name), "w") as file:
-            report = grade_c_code(c_file, openai_api_key)
-            file.write(f"Report for {c_file}:\n{report}\n\n")
+        # # # OpenAI API call and write to a file
+        # with open(os.path.join(reports_directory, Path(f'{c_file}.txt').name), "w") as file:
+        #     report = grade_c_code(c_file, openai_api_key)
+        #     file.write(f"Report for {c_file}:\n{report}\n\n")
 
         # Extract and print the style grade
-        style_grade = extract_and_print_grade(report)
+        # style_grade = extract_and_print_grade(report)
+        style_grade = 5
         print("style grade =", style_grade)
         # style_grade = 5  # CHANGE THIS TO THE GRADE
         # Calculate the total grade
         total_grade = 0.7 * float(code_grade) + 0.3 * float(style_grade) * 20
         print("Total grade =", total_grade)
-        #report = "Tests failed:\n" + ''.join(tests_failed)
+        report = "Tests failed:\n" + ''.join(tests_failed) if len(tests_failed) > 0 else "No tests failed."
 
-        report = report + "\n" + "Tests failed:\n" + ''.join(tests_failed)
+        with open(os.path.join(processed_dir, Path(f'{c_file}').name), 'r', encoding='utf-8') as file:
+            c_code = file.read()
+
+        # report = report + "\n" + "Tests failed:\n" + ''.join(tests_failed)
         # Populate the Excel sheet with the grades and report
-        sheet[f'A{index}'] = c_file
+        sheet[f'A{index}'] = os.path.join(processed_dir, Path(f'{c_file}').name)
         sheet[f'B{index}'] = code_grade
         sheet[f'C{index}'] = style_grade
         sheet[f'D{index}'] = report
         sheet[f'E{index}'] = total_grade
+        #sheet[f'F{index}'] = output
+        sheet[f'F{index}'] = c_code
 
     # Save the Excel workbook
     wb.save(root_dir + "/grading_results.xlsx")
@@ -192,7 +238,7 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
 # Example usage
 
 
-input_text = root_dir + "/inputQ1.txt"
-correct_output = root_dir + "/outputQ1.txt"
+input_text = root_dir + "/inputQ2.txt"
+correct_output = root_dir + "/outputQ2.txt"
 
 grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key)
