@@ -8,9 +8,9 @@ from openai import OpenAI
 
 openai_api_key = os.environ.get('OPENAI_KEY')
 
-root_dir = "C:/Grading/ass1"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/ass1/Q2/ProcessedQ2"  # Replace with the path to your Processed directory
-output_dir = "C:/Grading/ass1/Q2/OutputQ2"  # Replace with the path to your Processed directory
+root_dir = "C:/Grading/ass1/Q6"  # Replace with the path to your root directory
+processed_dir = "C:/Grading/ass1/Q6/ProcessedQ6"  # Replace with the path to your Processed directory
+output_dir = "C:/Grading/ass1/Q6/OutputQ6"  # Replace with the path to your Processed directory
 c_files = [os.path.join(processed_dir, file) for file in os.listdir(processed_dir) if file.endswith('.c')]
 
 
@@ -20,6 +20,8 @@ def grade_c_program(c_file, input_file, correct_file):
     program_name = "program.exe"
     compile_command = f"gcc {c_file} -o {program_name}"
     result = subprocess.run(compile_command, shell=True, text=True, capture_output=True)
+    problems_with_newline = False
+    missing_newline_after_scanf = False
 
     # Check for compilation errors
     if result.returncode != 0:
@@ -46,18 +48,21 @@ def grade_c_program(c_file, input_file, correct_file):
     # Initialize variables for output aggregation and grading
     aggregated_output = []
     run_errors = False
+    # delimiter = "END_OF_INPUT"  # Unique delimiter
 
     # Run the compiled program for each line in the input file
     for input_data in input_lines:
         process = subprocess.Popen(program_name, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    shell=True, text=True)
-        output, errors = process.communicate(input=input_data)
+        output, errors = process.communicate(input=input_data+ '\x04')
 
-        # Check for runtime errors
         if errors:
             run_errors = True
             break
 
+        if not output.endswith('\n'):
+            problems_with_newline = True
+            output += '\n'
         aggregated_output.append(output)
 
     if run_errors:
@@ -69,13 +74,12 @@ def grade_c_program(c_file, input_file, correct_file):
     aggregated_output = aggregated_output.lower()
     output_copy = aggregated_output
 
-
-
+    # Assuming aggregated_output and correct_lines are already defined
     aggregated_output = aggregated_output.split('\n')
     aggregated_output = [agr.strip() for agr in aggregated_output]
     correct_lines = correct_lines.strip().split('\n')
-    correct_lines = [correct_lines[i].split(';') for i in range(len(correct_lines))]
-    total_tests = sum(len(sub_elements) for sub_elements in correct_lines)
+    correct_lines = [[sub.split('|') for sub in line.split(';')] for line in correct_lines]
+    total_tests = len(correct_lines)
 
     def extract_numbers(text):
         if isinstance(text, list):
@@ -83,35 +87,80 @@ def grade_c_program(c_file, input_file, correct_file):
         # Use regular expression to find all numbers
         return re.findall(r'-?\d+\.?\d*', text)
 
+    #extract a letter sorrounded by spaces or end of string
+
+    def extract_letter(text):
+        if isinstance(text, list):
+            text = ''.join(text)
+        elif not isinstance(text, str):
+            return []  # or raise an error, depending on your requirements
+
+        # Pattern for a letter preceded by a space or start of the string
+        pattern1 = r'(?<=\s)[a-zA-Z](?=\s|$)'
+        pattern2 = r'^[a-zA-Z](?=\s|$)'
+
+        # Find all matches for both patterns and combine the results
+        inst = re.findall(pattern1, text) + re.findall(pattern2, text)
+        if 'a' in inst:
+            inst.remove('a')
+        return inst
+
     errors1 = 0
     errors2 = 0
     tests_failed1 = tests_failed.copy()
     tests_failed2 = tests_failed.copy()
-    for i in range(len(correct_lines)):
-        desired_numbers = extract_numbers(correct_lines[i])
-        student_numbers = extract_numbers(segmented_output[i])
-        # if desired_numbers != student_numbers:
-        #    tests_failed.add(f"Test {input_lines[i].strip()} failed. expected: {desired_numbers}, actual: {student_numbers} \n")
-        for num in desired_numbers:
-            if num not in student_numbers:
-                errors2 += 1
-                tests_failed1.add(f"Test {input_lines[i].strip()} failed.\n")
-        for j in range(len(correct_lines[i])):
-            if correct_lines[i][j] in aggregated_output:
-                aggregated_output.remove(correct_lines[i][j])
-            else:
-                errors1 += 1
-                tests_failed2.add(f"Test {input_lines[i].strip()} failed. expected: {correct_lines[i][j]}\n")
 
-    if errors1 > errors2:
+    for i, correct_options in enumerate(correct_lines):
+        desired_numbers = extract_numbers(correct_options[0])
+        student_numbers = extract_numbers(segmented_output[i])
+
+        desired_letters = extract_letter(correct_options[0])
+        student_letters = extract_letter(segmented_output[i])
+
+        if len(student_letters) == 1:
+            student_letters.insert(0, desired_letters[0])
+        if desired_letters != student_letters:
+            errors2 += 1
+            tests_failed2.add(f"Test {input_lines[i].strip()} failed.\n")
+
+        # Check for numeric discrepancies
+        # for num in desired_numbers:
+        #     if float(num) not in map(float, student_numbers):
+        #         errors2 += 1
+        #         tests_failed1.add(f"Test {input_lines[i].strip()} failed.\n")
+
+        # Check for exact string matches in any of the correct options
+        for options in correct_options:
+            if not any(correct_option in aggregated_output for correct_option in options):
+                errors1 += 1
+                tests_failed1.add(f"Test {input_lines[i].strip()} failed. expected one of: {options}\n")
+            else:
+                # If a match is found, remove the correct_option from aggregated_output
+                for correct_option in options:
+                    if correct_option in aggregated_output:
+                        aggregated_output.remove(correct_option)
+                        break
+
+    format_problems = False
+    if errors2 < errors1:
         errors = errors2
-        tests_failed = tests_failed1
+        tests_failed = tests_failed2
+        tests_failed.add("\nלהצמד לפורמט הדפסה\n")
+
     else:
         errors = errors1
-        tests_failed = tests_failed2
+        tests_failed = tests_failed1
     correct_count = total_tests - errors
     # Calculate the grade
     grade = (correct_count / total_tests) * 100
+    if format_problems:
+        grade -= 5
+    if problems_with_newline:
+        tests_failed.add("\nאין ירידת שורה בהדפסה האחרונה\n")
+        grade -= 5
+    if missing_newline_after_scanf:
+        tests_failed.add("\nאין ירידת שורה אחרי scanf\n")
+        grade -= 5
     if grade < 100:
         with open(os.path.join(output_dir, Path(f'{c_file}{grade}.txt').name), 'w') as file:
             file.write(output_copy)
@@ -190,7 +239,7 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
     sheet['C1'] = 'Style Grade'
     sheet['D1'] = 'Report'
     sheet['E1'] = 'Total Grade'
-    #sheet['F1'] = 'Output'
+    # sheet['F1'] = 'Output'
     sheet['F1'] = 'code'
 
     # Directory where the reports and code files are located
@@ -223,12 +272,12 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
 
         # report = report + "\n" + "Tests failed:\n" + ''.join(tests_failed)
         # Populate the Excel sheet with the grades and report
-        sheet[f'A{index}'] = os.path.join(processed_dir, Path(f'{c_file}').name)
+        sheet[f'A{index}'] = Path(f'{c_file}').name
         sheet[f'B{index}'] = code_grade
         sheet[f'C{index}'] = style_grade
         sheet[f'D{index}'] = report
         sheet[f'E{index}'] = total_grade
-        #sheet[f'F{index}'] = output
+        # sheet[f'F{index}'] = output
         sheet[f'F{index}'] = c_code
 
     # Save the Excel workbook
@@ -238,7 +287,7 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
 # Example usage
 
 
-input_text = root_dir + "/inputQ2.txt"
-correct_output = root_dir + "/outputQ2.txt"
+input_text = root_dir + "/inputQ6.txt"
+correct_output = root_dir + "/outputQ6.txt"
 
 grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key)
