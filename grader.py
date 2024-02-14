@@ -1,17 +1,31 @@
+import math
 import os
 import subprocess
 from pathlib import Path
 import re
 
 import openpyxl
+import pandas as pd
 from openai import OpenAI
 
 openai_api_key = os.environ.get('OPENAI_KEY')
 
-root_dir = "C:/Grading/ass1/Q6"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/ass1/Q6/ProcessedQ6"  # Replace with the path to your Processed directory
-output_dir = "C:/Grading/ass1/Q6/OutputQ6"  # Replace with the path to your Processed directory
+root_dir = "C:/Grading/ass4"  # Replace with the path to your root directory
+processed_dir = "C:/Grading/ass4/Processed"  # Replace with the path to your Processed directory
+output_dir = "C:/Grading/ass4/Output"  # Replace with the path to your Processed directory
 c_files = [os.path.join(processed_dir, file) for file in os.listdir(processed_dir) if file.endswith('.c')]
+
+data = pd.read_csv("C:/Grading/students.csv", encoding='utf-8')
+student_data = {}
+
+# Populate the dictionary
+for index, row in data.iterrows():
+    codeboard = row['codeboard']
+    ident = row['ident']
+    id = str(int(row['id'])) if not math.isnan(row['id']) else "0"
+
+    name_id_pair = [row['name'], ident, id]
+    student_data[codeboard] = name_id_pair
 
 
 def grade_c_program(c_file, input_file, correct_file):
@@ -51,19 +65,36 @@ def grade_c_program(c_file, input_file, correct_file):
     # delimiter = "END_OF_INPUT"  # Unique delimiter
 
     # Run the compiled program for each line in the input file
+    timeout_duration = 2  # Set the timeout duration in seconds
+
+    def send_input(proc, input_data):
+        print(f"Sending: {input_data}")
+        proc.stdin.write(input_data + "\n")
+        proc.stdin.flush()
+
     for input_data in input_lines:
         process = subprocess.Popen(program_name, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    shell=True, text=True)
-        output, errors = process.communicate(input=input_data+ '\x04')
+        try:
+            output, errors = process.communicate(input=input_data, timeout=timeout_duration)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            errors = process.communicate()[1]
+            tests_failed.add(f"Timeout Error. Grade: 0")
+            run_errors = True
+            return
 
         if errors:
             run_errors = True
             break
-
-        if not output.endswith('\n'):
-            problems_with_newline = True
-            output += '\n'
-        aggregated_output.append(output)
+        try:
+            if not output.endswith('\n'):
+                problems_with_newline = True
+                output += '\n'
+            aggregated_output.append(output)
+        except AttributeError:
+            tests_failed.add(f"No output. Grade: 0")
+            return 0, tests_failed, "No output"
 
     if run_errors:
         tests_failed.add(f"Runtime Error. Grade: 0")
@@ -81,13 +112,52 @@ def grade_c_program(c_file, input_file, correct_file):
     correct_lines = [[sub.split('|') for sub in line.split(';')] for line in correct_lines]
     total_tests = len(correct_lines)
 
+    def check_if_contains(input, output, output_numbers):
+        type = ""
+        try:
+            float(input)
+            type = "float"
+        except ValueError:
+            type = "string"
+        if input.startswith("0"):
+            type = "string"
+        if type == "float":
+
+            for num in output_numbers:
+                if not isinstance(num, list) or len(num) == 0:
+                    continue
+                if len(num) > 1:
+                    num = [int(float(n)) for n in num]
+                    try:
+                        num = int(''.join(map(str, num)))
+                    except ValueError:
+                        continue
+                elif len(num) == 1:
+                    num = num[0]
+
+                if math.isclose(float(num), float(input), rel_tol=0.05):
+                    # output_numbers.remove(num)
+                    return True
+            return False
+        if type == "string":
+            for out in output:
+                out = out.replace(" ", "")
+                if input.replace(" ", "") in out:
+                    # output.remove(out)
+                    return True
+        return False
+
     def extract_numbers(text):
         if isinstance(text, list):
-            text = ''.join(text)
+            numbers = []
+            for t in text:
+                numbers.append(extract_numbers(t))
+            return numbers
+            # text = ''.join(text)
         # Use regular expression to find all numbers
         return re.findall(r'-?\d+\.?\d*', text)
 
-    #extract a letter sorrounded by spaces or end of string
+    # extract a letter sorrounded by spaces or end of string
 
     def extract_letter(text):
         if isinstance(text, list):
@@ -109,58 +179,18 @@ def grade_c_program(c_file, input_file, correct_file):
     errors2 = 0
     tests_failed1 = tests_failed.copy()
     tests_failed2 = tests_failed.copy()
+    errors = 0
 
     for i, correct_options in enumerate(correct_lines):
-        desired_numbers = extract_numbers(correct_options[0])
-        student_numbers = extract_numbers(segmented_output[i])
+        correct = check_if_contains(correct_options[0][0], aggregated_output, extract_numbers(aggregated_output))
+        if not correct:
+            errors += 1
+            tests_failed.add(f"Failed test {correct_lines[i]}.\n")
 
-        desired_letters = extract_letter(correct_options[0])
-        student_letters = extract_letter(segmented_output[i])
-
-        if len(student_letters) == 1:
-            student_letters.insert(0, desired_letters[0])
-        if desired_letters != student_letters:
-            errors2 += 1
-            tests_failed2.add(f"Test {input_lines[i].strip()} failed.\n")
-
-        # Check for numeric discrepancies
-        # for num in desired_numbers:
-        #     if float(num) not in map(float, student_numbers):
-        #         errors2 += 1
-        #         tests_failed1.add(f"Test {input_lines[i].strip()} failed.\n")
-
-        # Check for exact string matches in any of the correct options
-        for options in correct_options:
-            if not any(correct_option in aggregated_output for correct_option in options):
-                errors1 += 1
-                tests_failed1.add(f"Test {input_lines[i].strip()} failed. expected one of: {options}\n")
-            else:
-                # If a match is found, remove the correct_option from aggregated_output
-                for correct_option in options:
-                    if correct_option in aggregated_output:
-                        aggregated_output.remove(correct_option)
-                        break
-
-    format_problems = False
-    if errors2 < errors1:
-        errors = errors2
-        tests_failed = tests_failed2
-        tests_failed.add("\nלהצמד לפורמט הדפסה\n")
-
-    else:
-        errors = errors1
-        tests_failed = tests_failed1
     correct_count = total_tests - errors
     # Calculate the grade
     grade = (correct_count / total_tests) * 100
-    if format_problems:
-        grade -= 5
-    if problems_with_newline:
-        tests_failed.add("\nאין ירידת שורה בהדפסה האחרונה\n")
-        grade -= 5
-    if missing_newline_after_scanf:
-        tests_failed.add("\nאין ירידת שורה אחרי scanf\n")
-        grade -= 5
+
     if grade < 100:
         with open(os.path.join(output_dir, Path(f'{c_file}{grade}.txt').name), 'w') as file:
             file.write(output_copy)
@@ -235,12 +265,16 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
 
     # Write headers to the Excel sheet
     sheet['A1'] = 'C File'
-    sheet['B1'] = 'Code Grade'
-    sheet['C1'] = 'Style Grade'
-    sheet['D1'] = 'Report'
-    sheet['E1'] = 'Total Grade'
+    sheet['B1'] = 'name'
+    sheet['C1'] = 'Ident'
+    sheet['D1'] = 'Id'
+
+    sheet['E1'] = 'Code Grade'
+    sheet['F1'] = 'Style Grade'
+    sheet['G1'] = 'Report'
+    sheet['H1'] = 'Total Grade'
     # sheet['F1'] = 'Output'
-    sheet['F1'] = 'code'
+    sheet['I1'] = 'code'
 
     # Directory where the reports and code files are located
     reports_directory = "reports"
@@ -272,13 +306,25 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
 
         # report = report + "\n" + "Tests failed:\n" + ''.join(tests_failed)
         # Populate the Excel sheet with the grades and report
+        student_info = student_data.get(Path(f'{c_file}').name)  # Try to get the data using file_name as key
+        if student_info is not None:
+            sheet[f'B{index}'] = student_data[Path(f'{c_file}').name][0]
+            sheet[f'C{index}'] = student_data[Path(f'{c_file}').name][1]
+
+            sheet[f'D{index}'] = student_data[Path(f'{c_file}').name][2]
+        else:
+            sheet[f'B{index}'] = "0"
+            sheet[f'C{index}'] = "0"
+            sheet[f'D{index}'] = "0"
+
+
         sheet[f'A{index}'] = Path(f'{c_file}').name
-        sheet[f'B{index}'] = code_grade
-        sheet[f'C{index}'] = style_grade
-        sheet[f'D{index}'] = report
-        sheet[f'E{index}'] = total_grade
+        sheet[f'E{index}'] = code_grade
+        sheet[f'F{index}'] = style_grade
+        sheet[f'G{index}'] = report
+        sheet[f'H{index}'] = total_grade
         # sheet[f'F{index}'] = output
-        sheet[f'F{index}'] = c_code
+        sheet[f'I{index}'] = c_code
 
     # Save the Excel workbook
     wb.save(root_dir + "/grading_results.xlsx")
@@ -287,7 +333,7 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
 # Example usage
 
 
-input_text = root_dir + "/inputQ6.txt"
-correct_output = root_dir + "/outputQ6.txt"
+input_text = root_dir + "/input.txt"
+correct_output = root_dir + "/output.txt"
 
 grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key)
