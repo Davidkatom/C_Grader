@@ -1,6 +1,7 @@
 import math
 import os
 import subprocess
+import time
 from pathlib import Path
 import re
 
@@ -10,12 +11,12 @@ from openai import OpenAI
 
 openai_api_key = os.environ.get('OPENAI_KEY')
 
-root_dir = "C:/Grading/ass4"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/ass4/Processed"  # Replace with the path to your Processed directory
-output_dir = "C:/Grading/ass4/Output"  # Replace with the path to your Processed directory
+root_dir = "C:/Grading/Now/ass1/Q6"  # Replace with the path to your root directory
+processed_dir = "C:/Grading/Now/ass1/Q6/Processed"  # Replace with the path to your Processed directory
+output_dir = "C:/Grading/Now/ass1/Q6/Output"  # Replace with the path to your Processed directory
 c_files = [os.path.join(processed_dir, file) for file in os.listdir(processed_dir) if file.endswith('.c')]
 
-data = pd.read_csv("C:/Grading/students.csv", encoding='utf-8')
+data = pd.read_csv("C:/Grading/Now/students.csv", encoding='utf-8')
 student_data = {}
 
 # Populate the dictionary
@@ -68,41 +69,50 @@ def grade_c_program(c_file, input_file, correct_file):
     timeout_duration = 2  # Set the timeout duration in seconds
 
     def send_input(proc, input_data):
-        print(f"Sending: {input_data}")
-        proc.stdin.write(input_data + "\n")
-        proc.stdin.flush()
-
-    for input_data in input_lines:
-        process = subprocess.Popen(program_name, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   shell=True, text=True)
         try:
-            output, errors = process.communicate(input=input_data, timeout=timeout_duration)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            errors = process.communicate()[1]
-            tests_failed.add(f"Timeout Error. Grade: 0")
-            run_errors = True
-            return
+            print(f"Sending: {input_data}")
+            proc.stdin.write(input_data + "\n")
+            proc.stdin.flush()
+        except OSError as e:
+            print(f"Error sending input '{input_data}': {e}")
+            # Optional: Add logic to handle the error, such as breaking out of the loop or terminating the process.
+            return False  # Indicate failure
+        return True  # Indicate success
 
+    process = subprocess.Popen(program_name, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               universal_newlines=True, bufsize=1)
+
+
+    try:
+        for input_data in input_lines:
+            # Send input followed by a delay to allow the C program to process and respond
+            send_input(process, input_data)
+            time.sleep(0.1)  # Adjust as necessary based on how the program processes input
+
+            # After sending all inputs, close stdin to signal no more input will be sent
+        try:
+            process.stdin.close()
+        except OSError as e:
+            print(f"Error closing stdin: {e}")
+            # Optional: Additional handling, such as logging or cleaning up resources.
+        # Read the final output
+        output = process.stdout.read()
+        print("Output:", output)
+        # Don't forget to capture errors if any
+        errors = process.stderr.read()
         if errors:
-            run_errors = True
-            break
-        try:
-            if not output.endswith('\n'):
-                problems_with_newline = True
-                output += '\n'
-            aggregated_output.append(output)
-        except AttributeError:
-            tests_failed.add(f"No output. Grade: 0")
-            return 0, tests_failed, "No output"
+            print("Errors:", errors)
+    finally:
+        # Ensure the process is terminated
+        process.terminate()
 
     if run_errors:
         tests_failed.add(f"Runtime Error. Grade: 0")
         return 0, tests_failed
 
-    segmented_output = aggregated_output.copy()
-    aggregated_output = ''.join(aggregated_output)
-    aggregated_output = aggregated_output.lower()
+    segmented_output = output
+    aggregated_output = output
+    #aggregated_output = aggregated_output.lower()
     output_copy = aggregated_output
 
     # Assuming aggregated_output and correct_lines are already defined
@@ -124,16 +134,16 @@ def grade_c_program(c_file, input_file, correct_file):
         if type == "float":
 
             for num in output_numbers:
-                if not isinstance(num, list) or len(num) == 0:
-                    continue
-                if len(num) > 1:
-                    num = [int(float(n)) for n in num]
-                    try:
-                        num = int(''.join(map(str, num)))
-                    except ValueError:
-                        continue
-                elif len(num) == 1:
-                    num = num[0]
+                # if not isinstance(num, list) or len(num) == 0:
+                #     continue
+                # if len(num) > 1:
+                #     num = [int(float(n)) for n in num]
+                #     try:
+                #         num = int(''.join(map(str, num)))
+                #     except ValueError:
+                #         continue
+                # elif len(num) == 1:
+                #     num = num[0]
 
                 if math.isclose(float(num), float(input), rel_tol=0.05):
                     # output_numbers.remove(num)
@@ -141,6 +151,7 @@ def grade_c_program(c_file, input_file, correct_file):
             return False
         if type == "string":
             for out in output:
+                out.replace(",", "")
                 out = out.replace(" ", "")
                 if input.replace(" ", "") in out:
                     # output.remove(out)
@@ -151,7 +162,9 @@ def grade_c_program(c_file, input_file, correct_file):
         if isinstance(text, list):
             numbers = []
             for t in text:
-                numbers.append(extract_numbers(t))
+                temp = extract_numbers(t)
+                for tem in temp:
+                    numbers.append(tem)
             return numbers
             # text = ''.join(text)
         # Use regular expression to find all numbers
@@ -198,52 +211,6 @@ def grade_c_program(c_file, input_file, correct_file):
     return grade, tests_failed, output_copy
 
 
-def grade_c_code(c_file_path, openai_api_key):
-    # Read the C file
-    try:
-        with open(c_file_path, 'r', encoding='utf-8') as file:
-            c_code = file.read()
-    except IOError:
-        return "Error reading C file."
-
-    # Set up OpenAI GPT-4 API
-    client = OpenAI(api_key=openai_api_key)
-
-    # Prepare the prompt for GPT-4
-
-    prompt = ("Analyze the following C code for coding standards and provide feedback in a structured format. "
-              "Only list significant issues that notably affect the code's readability, maintainability, "
-              "or functionality. Don't assume that the code neads more features or functionality.\n"
-              "Use bullet points for the following categories:\n"
-              "1. Comments: (Only mention if there's a significant lack of comments where necessary for understanding complex logic)\n"
-              "2. Naming Conventions: (Only note issues if naming conventions lead to confusion or misunderstanding of the code purpose)\n"
-              "3. Magic Numbers: (Mention only if the use of magic numbers significantly hinders understanding of what the code is doing)\n"
-              "4. Tabs for Indentation: (Only raise an issue if improper indentation severely affects the readability of the code)\n"
-              "5. Code Efficiency and Simplicity: (Only comment on efficiency and simplicity if there are glaring inefficiencies or overly complex structures that make the code hard to understand)\n\n"
-              "After the list, provide a grade on a scale of 1 to 5 based on these criteria. "
-              "A score of 5 means the code has no significant issues, and a lower score indicates notable problems in the listed categories.\n\n"
-              f"C Code:\n\n{c_code}\n\n"
-              "Please format your response as follows:\n"
-              "Comments:\n- [Significant Issue 1]\n- [Significant Issue 2]\n...\n"
-              "Naming Conventions:\n- [Significant Issue 1]\n- [Significant Issue 2]\n...\n"
-              "Magic Numbers:\n- [Significant Issue 1]\n- [Significant Issue 2]\n...\n"
-              "Tabs for Indentation:\n- [Significant Issue 1]\n- [Significant Issue 2]\n...\n"
-              "Code Efficiency and Simplicity:\n- [Significant Issue 1]\n- [Significant Issue 2]\n...\n"
-              "Grade = [only a number on a scale of 1 to 5] for example Grade = 3 ")
-
-    # Send the prompt to the GPT-4 API
-    try:
-        chat_completion = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=1.5,
-            model="gpt-3.5-turbo",
-        )
-        report = chat_completion.choices[0].message.content
-    except Exception as e:
-        return f"Error in API call: {e}"
-
-    # Output the report and grade
-    return report
 
 
 def extract_and_print_grade(report):
@@ -316,7 +283,6 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
             sheet[f'B{index}'] = "0"
             sheet[f'C{index}'] = "0"
             sheet[f'D{index}'] = "0"
-
 
         sheet[f'A{index}'] = Path(f'{c_file}').name
         sheet[f'E{index}'] = code_grade
