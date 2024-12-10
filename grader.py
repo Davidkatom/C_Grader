@@ -11,9 +11,9 @@ from openai import OpenAI
 
 openai_api_key = os.environ.get('OPENAI_KEY')
 
-root_dir = "C:/Grading/Now/ass1/Q6"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/Now/ass1/Q6/Processed"  # Replace with the path to your Processed directory
-output_dir = "C:/Grading/Now/ass1/Q6/Output"  # Replace with the path to your Processed directory
+root_dir = "C:/Grading/Now/ass2"  # Replace with the path to your root directory
+processed_dir = "C:/Grading/Now/ass2/Processed"  # Replace with the path to your Processed directory
+output_dir = "C:/Grading/Now/ass2/Output"  # Replace with the path to your Processed directory
 c_files = [os.path.join(processed_dir, file) for file in os.listdir(processed_dir) if file.endswith('.c')]
 
 data = pd.read_csv("C:/Grading/Now/students.csv", encoding='utf-8')
@@ -112,13 +112,18 @@ def grade_c_program(c_file, input_file, correct_file):
 
     segmented_output = output
     aggregated_output = output
-    #aggregated_output = aggregated_output.lower()
+    aggregated_output = aggregated_output.lower()
     output_copy = aggregated_output
 
     # Assuming aggregated_output and correct_lines are already defined
     aggregated_output = aggregated_output.split('\n')
     aggregated_output = [agr.strip() for agr in aggregated_output]
     correct_lines = correct_lines.strip().split('\n')
+    correct_lines_no_symbols = []
+    for line in correct_lines:
+        correct_lines_no_symbols.append(''.join(char for char in line if char.isalnum() or "|"))
+
+    correct_lines = correct_lines_no_symbols
     correct_lines = [[sub.split('|') for sub in line.split(';')] for line in correct_lines]
     total_tests = len(correct_lines)
 
@@ -134,16 +139,16 @@ def grade_c_program(c_file, input_file, correct_file):
         if type == "float":
 
             for num in output_numbers:
-                # if not isinstance(num, list) or len(num) == 0:
-                #     continue
-                # if len(num) > 1:
-                #     num = [int(float(n)) for n in num]
-                #     try:
-                #         num = int(''.join(map(str, num)))
-                #     except ValueError:
-                #         continue
-                # elif len(num) == 1:
-                #     num = num[0]
+                if not isinstance(num, list) or len(num) == 0:
+                    continue
+                if len(num) > 1:
+                    num = [int(float(n)) for n in num]
+                    try:
+                        num = int(''.join(map(str, num)))
+                    except ValueError:
+                        continue
+                elif len(num) == 1:
+                    num = num[0]
 
                 if math.isclose(float(num), float(input), rel_tol=0.05):
                     # output_numbers.remove(num)
@@ -162,9 +167,7 @@ def grade_c_program(c_file, input_file, correct_file):
         if isinstance(text, list):
             numbers = []
             for t in text:
-                temp = extract_numbers(t)
-                for tem in temp:
-                    numbers.append(tem)
+                numbers.append(extract_numbers(t))
             return numbers
             # text = ''.join(text)
         # Use regular expression to find all numbers
@@ -195,7 +198,12 @@ def grade_c_program(c_file, input_file, correct_file):
     errors = 0
 
     for i, correct_options in enumerate(correct_lines):
-        correct = check_if_contains(correct_options[0][0], aggregated_output, extract_numbers(aggregated_output))
+        correct_options = correct_options[0]
+        correct = False
+        for option in correct_options:
+            correct = check_if_contains(option, aggregated_output, extract_numbers(aggregated_output))
+            if correct is True:
+                continue
         if not correct:
             errors += 1
             tests_failed.add(f"Failed test {correct_lines[i]}.\n")
