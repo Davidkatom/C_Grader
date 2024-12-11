@@ -1,13 +1,106 @@
+import os
 import tkinter as tk
 from tkinter import ttk
+
+import openpyxl
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
+import UIGrader
 from c_file_runner import run_file
+from UIGrader import check_ass
 
-input = "C:/Grading/Now/ass2/Input.txt"
-output_file = "C:/Grading/Now/ass2/Output.txt"
+root_dir = "C:/Grading/Now/ass2"
+input = root_dir + "/Input.txt"
+output_file = root_dir + "/Output.txt"
 c_file = ""
 checkbox_states = {}
+
+results = UIGrader.start_grading_process(root_dir)
+index = 0
+
+
+
+def save():
+    global root
+    name = os.path.basename(c_file)
+
+
+    file_path = root_dir + "/grading_results.xlsx"
+    # Open the workbook
+    wb = openpyxl.load_workbook(file_path)
+    sheet = wb.active
+
+    # Find the row with the given c_file
+    row_to_update = None
+    for row in sheet.iter_rows(min_row=2, max_col=1, values_only=True):
+        # print(row[0])# Iterate over the first column (C File)
+        if row[0] == name:
+            row_to_update = row[0]
+            break
+    if row_to_update is None:
+        print(name + " Not found")
+        return
+    # If the row is found, populate the cells
+    if row_to_update is not None:
+        for row in sheet.iter_rows(min_row=2):
+            if row[0].value == name:
+                # Update the corresponding cells
+                row[4].value = grade.get()
+                row[6].value = bottom_text_area.get("1.0", "end")
+                row[7].value = grade.get()
+                break
+    else:
+        print(f"C File '{c_file}' not found in the Excel file.")
+
+    # Save the workbook
+    wb.save(file_path)
+    print(f"Excel file '{file_path}' updated successfully.")
+def reset_fields():
+    text_area.delete("1.0", "end")
+
+    right_text_area.config(state='normal')
+    bottom_text_area.config(state='normal')
+
+    right_text_area.delete("1.0", "end")
+    bottom_text_area.delete("1.0", "end")
+    grade.delete(0, "end")  # Deletes all text from the `Entry`
+
+    right_text_area.config(state='disabled')
+
+
+def populate_result(result):
+    global c_file
+    c_file = result.get("c_file")
+
+    reset_fields()
+    right_text_area.config(state='normal')
+
+    text_area.insert("1.0", result.get("c_code"))
+    right_text_area.insert("1.0", result.get("output"))
+    bottom_text_area.insert("1.0", result.get("report"))
+    grade.insert(0, result.get("grade"))
+
+
+    right_text_area.config(state='disabled')
+
+
+def forward():
+    global index
+    index += 1
+    if index >= len(results):
+        index = 0
+
+    populate_result(results[index])
+
+
+def backward():
+    global index
+    index -= 1
+    if index < 0:
+        index = len(results) - 1
+
+    populate_result(results[index])
+
 
 def load_text_from_file(filepath):
     global c_file
@@ -24,11 +117,13 @@ def load_text_from_file(filepath):
     except Exception as e:
         print(f"Error loading file: {e}")
 
+
 def drop_file(event):
     dropped_files = event.data
     if dropped_files:
         first_file = dropped_files.split(' ')[0]
         load_text_from_file(first_file)
+
 
 def compile_and_run():
     global input, output_file
@@ -41,13 +136,22 @@ def compile_and_run():
     right_text_area.insert("1.0", output)
     right_text_area.config(state='disabled')
 
+    ### check
+    grade, tests_failed = check_ass(output_file, output)
+
+    bottom_text_area.delete("1.0", "end")
+    bottom_text_area.insert("end", "Grade: " + str(grade) + "\n")
+    bottom_text_area.insert("end", tests_failed)
+
+
 def toggle_checkbox(option):
     checkbox_states[option] = not checkbox_states.get(option, False)
     print(f"{option} set to {checkbox_states[option]}")
 
+
 # Create a DnD-enabled root window
 root = TkinterDnD.Tk()
-root.title("Text Editor with Compile and Run, Split Views, and Options")
+root.title("Ass checker")
 
 # Configure main window grid
 root.columnconfigure(0, weight=0)
@@ -81,7 +185,22 @@ output_file_entry = tk.Entry(top_frame, width=40)
 output_file_entry.insert(0, output_file)
 output_file_entry.grid(row=1, column=3, padx=5)
 
-# Left Frame with vertical buttons
+# Left Frame with vertical checkboxes
+topleft_frame = tk.Frame(root)
+topleft_frame.grid(row=0, column=0, sticky="nsw")
+backward_button = tk.Button(topleft_frame, text="Backward", command=backward)
+backward_button.grid(row=0, column=0, padx=5, pady=5)
+
+forward_button = tk.Button(topleft_frame, text="Forward", command=forward)
+forward_button.grid(row=0, column=1, padx=5, pady=5)
+
+save_button = tk.Button(topleft_frame, text="Save", command=save)
+save_button.grid(row=1, column=0, padx=5, pady=5)
+
+grade = tk.Entry(topleft_frame, width=5)
+grade.grid(row=1, column=1, padx=5)
+
+# Left Frame with vertical checkboxes
 left_frame = tk.Frame(root)
 left_frame.grid(row=2, column=0, sticky="nsw")
 
@@ -132,7 +251,7 @@ bottom_text_area.config(yscrollcommand=bottom_scrollbar.set)
 right_text_area.insert("1.0", "Right Text Area - Top")
 right_text_area.config(state="disabled")
 bottom_text_area.insert("1.0", "Right Text Area - Bottom")
-bottom_text_area.config(state="disabled")
+bottom_text_area.config(state="normal")
 
 # Enable Drag-and-Drop
 text_area.drop_target_register(DND_FILES)
@@ -140,9 +259,13 @@ text_area.dnd_bind('<<Drop>>', drop_file)
 
 # Add drag-and-drop to the input and output file entry fields
 input_file_entry.drop_target_register(DND_FILES)
-input_file_entry.dnd_bind('<<Drop>>', lambda e: input_file_entry.delete(0, tk.END) or input_file_entry.insert(0, e.data.strip('{}')))
+input_file_entry.dnd_bind('<<Drop>>', lambda e: input_file_entry.delete(0, tk.END) or input_file_entry.insert(0,
+                                                                                                              e.data.strip(
+                                                                                                                  '{}')))
 
 output_file_entry.drop_target_register(DND_FILES)
-output_file_entry.dnd_bind('<<Drop>>', lambda e: output_file_entry.delete(0, tk.END) or output_file_entry.insert(0, e.data.strip('{}')))
-
+output_file_entry.dnd_bind('<<Drop>>', lambda e: output_file_entry.delete(0, tk.END) or output_file_entry.insert(0,
+                                                                                                                 e.data.strip(
+                                                                                                                     '{}')))
+populate_result(results[0])
 root.mainloop()
