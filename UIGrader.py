@@ -8,7 +8,6 @@ import pandas as pd
 
 import c_file_runner
 
-
 def check_ass(correct_output_path, user_output):
     correct_lines = read_output(correct_output_path)
     errors = 0
@@ -22,7 +21,7 @@ def check_ass(correct_output_path, user_output):
     correct_lines_no_symbols = []
     for line in correct_lines:
         correct_lines_no_symbols.append(''.join(char for char in line if char.isalnum() or "|"))
-    correct_lines = correct_lines_no_symbols
+    # correct_lines = correct_lines_no_symbols
     correct_lines = [[sub.split('|') for sub in line.split(';')] for line in correct_lines]
     total_tests = len(correct_lines)
 
@@ -86,7 +85,8 @@ def check_if_contains(input, output, output_numbers):
         for out in output:
             out.replace(",", "")
             out = out.replace(" ", "")
-            if input.replace(" ", "") in out:
+            out = out.replace(",","")
+            if input.replace(" ", "") == out: #todo change to in (changed for palindrome)
                 # output.remove(out)
                 return True
     return False
@@ -179,6 +179,11 @@ def start_grading_process(root):
         sheet[f'H{index}'] = total_grade
         # sheet[f'F{index}'] = output
         sheet[f'I{index}'] = c_code
+        sheet[f'J{index}'] = output
+
+        if code_grade < 100:
+            with open(os.path.join(output_dir, Path(f'{c_file}{code_grade}.txt').name), 'w') as file:
+                file.write(output)
 
         results.append({"c_file": c_file, "report": report, "output": output, "grade": code_grade, "c_code": c_code})
     # Save the Excel workbook

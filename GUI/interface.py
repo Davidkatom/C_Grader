@@ -3,27 +3,53 @@ import tkinter as tk
 from tkinter import ttk
 
 import openpyxl
+from openpyxl.reader.excel import load_workbook
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
 import UIGrader
 from c_file_runner import run_file
 from UIGrader import check_ass
 
-root_dir = "C:/Grading/Now/ass2"
+root_dir = "C:/Grading/Now/ass4/Q2"
 input = root_dir + "/Input.txt"
 output_file = root_dir + "/Output.txt"
 c_file = ""
 checkbox_states = {}
 
-results = UIGrader.start_grading_process(root_dir)
-index = 0
 
+# results = UIGrader.start_grading_process(root_dir)
+
+def load_from_excel():
+    results = []
+
+    # Load the workbook and select the active sheet
+    wb = load_workbook(root_dir + "/grading_results.xlsx")
+    sheet = wb.active
+
+    # Iterate over rows, skipping the header row
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        if row[4] == "100":
+            continue
+        # Create a dictionary for each row and map column values
+        result = {
+            "c_file": row[0],  # Column A: File name
+            "grade": row[4],  # Column E: Code grade
+            "report": row[6],  # Column G: Report
+            "c_code": row[8],  # Column I: C code
+            "output": row[9]
+        }
+        results.append(result)
+
+    return results
+
+
+results = load_from_excel()
+index = 0
 
 
 def save():
     global root
     name = os.path.basename(c_file)
-
 
     file_path = root_dir + "/grading_results.xlsx"
     # Open the workbook
@@ -54,7 +80,9 @@ def save():
 
     # Save the workbook
     wb.save(file_path)
-    print(f"Excel file '{file_path}' updated successfully.")
+    # print(f"Excel file '{file_path}' updated successfully.")
+
+
 def reset_fields():
     text_area.delete("1.0", "end")
 
@@ -70,27 +98,36 @@ def reset_fields():
 
 def populate_result(result):
     global c_file
-    c_file = result.get("c_file")
+    print(result)
+
+    c_file = root_dir + "/Processed/" + result.get("c_file")
+    name = os.path.basename(result.get("c_file"))
+
+    title_label.config(text=name)  # Update title with file name
+    title_index.config(text=fr'{index}/{len(results)}')
 
     reset_fields()
     right_text_area.config(state='normal')
 
     text_area.insert("1.0", result.get("c_code"))
-    right_text_area.insert("1.0", result.get("output"))
-    bottom_text_area.insert("1.0", result.get("report"))
-    grade.insert(0, result.get("grade"))
-
+    right_text_area.insert("1.0", result.get("output") if result.get("output") is not None else "0")
+    bottom_text_area.insert("1.0", result.get("report") if result.get("report") is not None else "0")
+    grade.insert(0, result.get("grade") if result.get("grade") is not None else "0")
 
     right_text_area.config(state='disabled')
 
-
 def forward():
+    global results
     global index
     index += 1
     if index >= len(results):
         index = 0
+    save()
 
+    results = load_from_excel()
     populate_result(results[index])
+    if results[index].get("grade") == 100:
+        forward()
 
 
 def backward():
@@ -98,7 +135,7 @@ def backward():
     index -= 1
     if index < 0:
         index = len(results) - 1
-
+    save()
     populate_result(results[index])
 
 
@@ -163,6 +200,7 @@ root.rowconfigure(2, weight=1)
 title_label = tk.Label(root, text="", font=("Helvetica", 14), anchor="center")
 title_label.grid(row=0, column=0, columnspan=3, sticky="ew", pady=5)
 
+
 # Top Frame for buttons and input/output fields
 top_frame = tk.Frame(root)
 top_frame.grid(row=1, column=0, columnspan=3, sticky="ew")
@@ -171,6 +209,9 @@ top_frame.columnconfigure((0, 1, 2, 3), weight=1)
 # Compile and Run Button
 compile_button = tk.Button(top_frame, text="Compile and Run", command=compile_and_run)
 compile_button.grid(row=0, column=0, padx=5, pady=5)
+
+title_index = tk.Label(top_frame, text="", font=("Helvetica", 14), anchor="center")
+title_index.grid(row=1, column=1, columnspan=3, sticky="ew", pady=5)
 
 # Input and Output File Fields
 input_file_label = tk.Label(top_frame, text="Input File:")

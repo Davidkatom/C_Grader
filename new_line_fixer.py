@@ -4,7 +4,7 @@ from openpyxl import Workbook
 
 # Regex to identify and capture printf statements
 pattern = re.compile(r'(printf\s*\("([^"]*)"(.*?)\);)')
-dir = "C:/Grading/Now/ass2/Processed"
+dir = "C:/Grading/Now/ass4/Q1/Processed"
 
 def fix_printf_line(line):
     # This function finds all matches of printf and ensures they end with \n if not already.
@@ -34,40 +34,46 @@ def fix_printf_line(line):
 
 
 def main():
-    file_inserts_count = {}  # Dictionary to store filename -> number of inserts
+    file_counts = {}  # Dictionary to store filename -> (printf insertions, return 0 removals)
 
     for filename in os.listdir(dir):
         if filename.endswith('.c'):
-            path = dir + "/" + filename
+            path = os.path.join(dir, filename)
             with open(path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
 
-            total_inserts = 0
+            printf_insertions = 0
+            return_removals = 0
             new_lines = []
             for line in lines:
+                # Skip lines containing 'return 0;' and count them
+                if 'return 0;' in line.strip():
+                    return_removals += 1
+                    continue
                 modified_line, count = fix_printf_line(line)
                 new_lines.append(modified_line)
-                total_inserts += count
+                printf_insertions += count
 
             # Write back to the file
             with open(path, 'w', encoding='utf-8') as f:
                 f.writelines(new_lines)
 
-            # Store the insertion count for this file
-            file_inserts_count[filename] = total_inserts
+            # Store the counts for this file
+            file_counts[filename] = (printf_insertions, return_removals)
 
     # Create an Excel report with the counts
     wb = Workbook()
     ws = wb.active
     ws.title = "Report"
-    ws.append(["File Name", "Number of Inserts"])  # Header row
+    ws.append(["File Name", "Number of printf Insertions", "Number of return 0; Removals"])  # Header row
 
-    for fname, count in file_inserts_count.items():
-        ws.append([fname, count])
+    for fname, counts in file_counts.items():
+        ws.append([fname, counts[0], counts[1]])
 
     # Save the workbook
-    wb.save(dir + "/report.xlsx")
-    print("Report generated: report.xlsx")
+    report_path = os.path.join(dir, "report.xlsx")
+    wb.save(report_path)
+    print(f"Report generated: {report_path}")
 
 
 if __name__ == "__main__":

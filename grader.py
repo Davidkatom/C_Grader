@@ -11,9 +11,9 @@ from openai import OpenAI
 
 openai_api_key = os.environ.get('OPENAI_KEY')
 
-root_dir = "C:/Grading/Now/ass2"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/Now/ass2/Processed"  # Replace with the path to your Processed directory
-output_dir = "C:/Grading/Now/ass2/Output"  # Replace with the path to your Processed directory
+root_dir = "C:/Grading/Now/ass4/Q2"  # Replace with the path to your root directory
+processed_dir = "C:/Grading/Now/ass4/Q2/Processed"  # Replace with the path to your Processed directory
+output_dir = "C:/Grading/Now/ass4/Q2/Output"  # Replace with the path to your Processed directory
 c_files = [os.path.join(processed_dir, file) for file in os.listdir(processed_dir) if file.endswith('.c')]
 
 data = pd.read_csv("C:/Grading/Now/students.csv", encoding='utf-8')
@@ -248,8 +248,8 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
     sheet['F1'] = 'Style Grade'
     sheet['G1'] = 'Report'
     sheet['H1'] = 'Total Grade'
-    # sheet['F1'] = 'Output'
     sheet['I1'] = 'code'
+    sheet['J1'] = 'Output'
 
     # Directory where the reports and code files are located
     reports_directory = "reports"
@@ -297,8 +297,8 @@ def grade_and_populate_excel(c_files, input_text, correct_output, openai_api_key
         sheet[f'F{index}'] = style_grade
         sheet[f'G{index}'] = report
         sheet[f'H{index}'] = total_grade
-        # sheet[f'F{index}'] = output
         sheet[f'I{index}'] = c_code
+        sheet[f'J{index}'] = output
 
     # Save the Excel workbook
     wb.save(root_dir + "/grading_results.xlsx")
