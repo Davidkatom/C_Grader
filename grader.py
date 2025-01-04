@@ -11,9 +11,9 @@ from openai import OpenAI
 
 openai_api_key = os.environ.get('OPENAI_KEY')
 
-root_dir = "C:/Grading/Now/ass4/Q2"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/Now/ass4/Q2/Processed"  # Replace with the path to your Processed directory
-output_dir = "C:/Grading/Now/ass4/Q2/Output"  # Replace with the path to your Processed directory
+root_dir = "C:/Grading/Now/ass4/Q4"  # Replace with the path to your root directory
+processed_dir = "C:/Grading/Now/ass4/Q4/Processed"  # Replace with the path to your Processed directory
+output_dir = "C:/Grading/Now/ass4/Q4/Output"  # Replace with the path to your Processed directory
 c_files = [os.path.join(processed_dir, file) for file in os.listdir(processed_dir) if file.endswith('.c')]
 
 data = pd.read_csv("C:/Grading/Now/students.csv", encoding='utf-8')

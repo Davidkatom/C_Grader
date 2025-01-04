@@ -10,7 +10,7 @@ import UIGrader
 from c_file_runner import run_file
 from UIGrader import check_ass
 
-root_dir = "C:/Grading/Now/ass4/Q2"
+root_dir = "C:/Grading/Now/ass4/Q4"
 input = root_dir + "/Input.txt"
 output_file = root_dir + "/Output.txt"
 c_file = ""
@@ -28,7 +28,7 @@ def load_from_excel():
 
     # Iterate over rows, skipping the header row
     for row in sheet.iter_rows(min_row=2, values_only=True):
-        if row[4] == "100":
+        if row[4] == "100" or row[4] == 100:
             continue
         # Create a dictionary for each row and map column values
         result = {
