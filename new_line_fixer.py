@@ -4,7 +4,7 @@ from openpyxl import Workbook
 
 # Regex to identify and capture printf statements
 pattern = re.compile(r'(printf\s*\("([^"]*)"(.*?)\);)')
-dir = "C:/Grading/Now/ass4/Q1/Processed"
+dir = "C:/Grading/Now/ass5/Processed"
 
 def fix_printf_line(line):
     # This function finds all matches of printf and ensures they end with \n if not already.

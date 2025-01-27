@@ -11,9 +11,9 @@ from openai import OpenAI
 
 openai_api_key = os.environ.get('OPENAI_KEY')
 
-root_dir = "C:/Grading/Now/ass4/Q4"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/Now/ass4/Q4/Processed"  # Replace with the path to your Processed directory
-output_dir = "C:/Grading/Now/ass4/Q4/Output"  # Replace with the path to your Processed directory
+root_dir = "C:/Grading/Now/ass5"  # Replace with the path to your root directory
+processed_dir = "C:/Grading/Now/ass5/Processed"  # Replace with the path to your Processed directory
+output_dir = "C:/Grading/Now/ass5/Output"  # Replace with the path to your Processed directory
 c_files = [os.path.join(processed_dir, file) for file in os.listdir(processed_dir) if file.endswith('.c')]
 
 data = pd.read_csv("C:/Grading/Now/students.csv", encoding='utf-8')
@@ -71,7 +71,7 @@ def grade_c_program(c_file, input_file, correct_file):
     def send_input(proc, input_data):
         try:
             print(f"Sending: {input_data}")
-            proc.stdin.write(input_data + "\n")
+            proc.stdin.write(input_data)
             proc.stdin.flush()
         except OSError as e:
             print(f"Error sending input '{input_data}': {e}")
@@ -126,7 +126,6 @@ def grade_c_program(c_file, input_file, correct_file):
     correct_lines = correct_lines_no_symbols
     correct_lines = [[sub.split('|') for sub in line.split(';')] for line in correct_lines]
     total_tests = len(correct_lines)
-
     def check_if_contains(input, output, output_numbers):
         type = ""
         try:
@@ -139,16 +138,16 @@ def grade_c_program(c_file, input_file, correct_file):
         if type == "float":
 
             for num in output_numbers:
-                if not isinstance(num, list) or len(num) == 0:
-                    continue
-                if len(num) > 1:
-                    num = [int(float(n)) for n in num]
-                    try:
-                        num = int(''.join(map(str, num)))
-                    except ValueError:
-                        continue
-                elif len(num) == 1:
-                    num = num[0]
+                # if not isinstance(num, list) or len(num) == 0:
+                #     continue
+                # if len(num) > 1:
+                #     num = [int(float(n)) for n in num]
+                #     try:
+                #         num = int(''.join(map(str, num)))
+                #     except ValueError:
+                #         continue
+                # elif len(num) == 1:
+                #     num = num[0]
 
                 if math.isclose(float(num), float(input), rel_tol=0.05):
                     # output_numbers.remove(num)
@@ -197,11 +196,23 @@ def grade_c_program(c_file, input_file, correct_file):
     tests_failed2 = tests_failed.copy()
     errors = 0
 
+    def flatten_and_convert_to_numbers(data):
+        result = []
+        for item in data:
+            if isinstance(item, list):
+                # Recursively process nested lists
+                result.extend(flatten_and_convert_to_numbers(item))
+            else:
+                # Convert item to integer and append to the result
+                result.append(int(item))
+        return result
+
     for i, correct_options in enumerate(correct_lines):
         correct_options = correct_options[0]
         correct = False
         for option in correct_options:
-            correct = check_if_contains(option, aggregated_output, extract_numbers(aggregated_output))
+            nums = flatten_and_convert_to_numbers(extract_numbers(aggregated_output))
+            correct = check_if_contains(option, aggregated_output, nums)
             if correct is True:
                 continue
         if not correct:

@@ -10,7 +10,7 @@ import UIGrader
 from c_file_runner import run_file
 from UIGrader import check_ass
 
-root_dir = "C:/Grading/Now/ass4/Q4"
+root_dir = "C:/Grading/Now/ass5"
 input = root_dir + "/Input.txt"
 output_file = root_dir + "/Output.txt"
 c_file = ""

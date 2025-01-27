@@ -1,8 +1,8 @@
 import os
 import shutil
 
-root_dir = "C:/Grading/Now/ass4/Q4/Pre"  # Replace with the path to your root directory
-processed_dir = "C:/Grading/Now/ass4/Q4/Processed"  # Replace with the path to your Processed directory
+root_dir = "C:/Grading/Now/ass5/Pre"  # Replace with the path to your root directory
+processed_dir = "C:/Grading/Now/ass5/Processed"  # Replace with the path to your Processed directory
 
 # Create the Processed directory if it doesn't exist
 if not os.path.exists(processed_dir):

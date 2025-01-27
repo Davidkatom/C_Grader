@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 # Set the root directory
-root = "C:/Grading/Now/ass1"
+root = "C:/Grading/Now/ass4"
 
 # Initialize a set to collect all unique student names
 all_students = set()
@@ -68,4 +68,4 @@ for subfolder in subfolders:
     all_data = all_data.join(df[[f'{folder_name}_Report', f'{folder_name}_Grade']])
 
 # Save the merged data to a new Excel file
-all_data.to_excel('C:/Grading/Now/ass1/merged_grades.xlsx')
+all_data.to_excel('C:/Grading/Now/ass4/merged_grades.xlsx')
