@@ -1,7 +1,7 @@
 
 from openai import OpenAI
 root = "C://Grading//Now//ass6//"
-client = OpenAI(api_key="sk-b3d68a5c3de84457bbd3d094ae853702", base_url="https://api.deepseek.com")
+client = OpenAI(api_key="sk-", base_url="https://api.deepseek.com")
 
 #read from file:
 
